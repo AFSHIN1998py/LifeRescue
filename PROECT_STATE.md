@@ -22,7 +22,10 @@
 - **هدف اصلی:** درآمد از فریلنسری (پونیشا، کارلنسر، پارس‌فریلنسر، دیوار)
 - **بودجه:** ۱۰ میلیون تومان (برای آموزش و سرمایه)
 - **وضعیت:** نیاز به درآمد سریع، نمی‌تونه دوره طولانی بره
-- **زمان:** پروژه رو توی چند هفته پیش برده، پیوسته و باانگیزه
+- **زمان:** پروژه رو توی یک هفته پیش برده، پیوسته و باانگیزه
+- **محدودیت اینترنت:** اینترنت ایران بسیار ناپایداره، دولت عمداً کندش می‌کنه. گاهی چند روز نمی‌تونه وصل بشه. باید در طراحی پروژه این رو در نظر گرفت.
+- **تحریم:** نمی‌تونه خرید دلاری کنه (کارت اعتباری خارجی نداره). پس هر راه‌حلی که هزینه دلاری داره (مثل Railway Volume) عملاً غیرقابل استفاده‌ست.
+- **اعتماد:** کاربر به DeepSeek اعتماد کامل داره و حتی اطلاعات حساس (Connection String, Token) رو فرستاده. **باید همیشه یادآوری کنیم که این کار امن نیست و پسورد/توکن رو بعد از فرستادن عوض کنه.**
 
 ### سبک گفتگو و شخصیت
 - **صمیمی و رفیقانه:** «رفیق»، «دوست عزیزم»، «افشین جان» صدا می‌کنه
@@ -32,6 +35,11 @@
 - **مشکل اینترنت:** فیلترشکن ناپایدار، تلگرام روی کامپیوتر کار نمی‌کنه، مجبوره از Railway استفاده کنه
 - **مشکل سینک چت:** چت گوشی و کامپیوتر DeepSeek سینک نمی‌شن، به همین خاطر این فایل رو ساختیم
 - **سبک انتقال کد:** از تلگرام Saved Messages برای انتقال بین گوشی و کامپیوتر استفاده می‌کنه
+- **خیلی صمیمی:** «رفیق»، «دوست عزیزم» — رابطه دوستانه و برابر
+- **دقت بالا:** چشم تیزبین داره، خطاهای ریز رو می‌گیره (مثلاً یادش بود که `--search` توی main نیست)
+- **صبور ولی خسته از محدودیت‌ها:** از فیلترینگ و کندی اینترنت واقعاً کلافه‌ست
+- **مایل به یادگیری:** دوست داره بفهمه چرا، نه فقط چطور
+- **کم‌حوصله در آپلود مکرر:** ترجیح می‌ده همه تغییرات رو یه جا انجام بده بعد آپلود کنه
 
 ### چه چیزهایی براش مهمه
 - **درآمد سریع:** هر ویژگی جدید باید به فروش کمک کنه
@@ -77,45 +85,48 @@
 ## 🏗 بخش سوم: معماری فعلی
 
 ### ساختار پروژه
+### ساختار پروژه
 digikala-scraper/
-├── scraper.py ← هسته (search + monitor + alert)
-├── bot.py ← ربات تلگرام v3.2
-├── urls.txt ← seed محصولات
-├── Procfile ← worker: python bot.py
-├── requirements.txt ← requests, bs4, dotenv, lxml, telegram
-├── .python-version ← 3.12
-├── .env ← متغیرهای محیطی (لوکال)
-├── .env.example ← نمونه
+├── scraper.py           ← هسته (search + monitor + alert + torob)
+├── bot.py               ← ربات تلگرام v3.3 (با مقایسه ترب)
+├── urls.txt             ← seed محصولات
+├── Procfile             ← worker: python bot.py
+├── requirements.txt     ← requests, bs4, dotenv, lxml, telegram, curl_cffi, psycopg2-binary
+├── .python-version      ← 3.12
+├── .env                 ← متغیرهای محیطی (لوکال)
+├── .env.example
 ├── .gitignore
 ├── README.md
-├── PROJECT_STATE.md ← همین فایل
-└── data/ ← دیتابیس و CSV و لاگ
-├── prices.db
-├── prices.csv
-└── scraper.log
+├── PROJECT_STATE.md     ← همین فایل
+└── data/                ← فقط لاگ و CSV (دیتابیس دیگه اینجا نیست)
+    ├── prices.csv
+    └── scraper.log
 
 
 ### معماری Railway
+- **پلن:** Free/Trial (بدون Volume چون تحریم)
 - **یه سرویس:** `python bot.py`
 - **اسکرپر در thread جدا:** داخل bot.py با `threading.Thread`
-- **دیتابیس:** SQLite مشترک بین ربات و اسکرپر
-- **دلیل یه سرویس:** پلن Free Railway دیسک مشترک بین سرویس‌ها نداره
+- **دیتابیس:** **PostgreSQL روی Neon** (رایگان، بدون تحریم)
+  - قبلاً SQLite بود ولی چون Railway Free دیسک دائمی نداره، محصولات با هر Redeploy پاک می‌شدن
+- **دلیل PostgreSQL:** داده دائمی + رایگان + سازگار با تحریم
+
 
 ### Variables در Railway
-BOT_TOKEN = <توکن ربات تلگرام>
+BOT_TOKEN = <توکن ربات>
 CHAT_ID = 98598535
 CHECK_INTERVAL = 21600
 MAX_RETRIES = 2
-DB_PATH = data/prices.db
+DATABASE_URL = postgresql://... (از Neon)
 CSV_PATH = data/prices.csv
 LOG_PATH = data/scraper.log
 
-
 ### API های استفاده‌شده
-- **دیجی‌کالا v2:** `https://api.digikala.com/v2/product/{id}/` (برای جزئیات محصول)
+- **دیجی‌کالا v2:** `https://api.digikala.com/v2/product/{id}/` (جزئیات محصول)
 - **دیجی‌کالا v1 search:** `https://api.digikala.com/v1/search/?q={query}&sort={sort}&page={page}`
-- **ترب:** `https://api.torob.com/v4/base-product/search/?q={query}&page=0&size=5` (در حال تست)
-
+- **ترب:** `https://api.torob.com/v4/base-product/search/?q={query}&page=0&size={limit}`
+  - نیاز به `curl_cffi` با `impersonate="chrome"` (وگرنه 490 → CAPTCHA)
+  - قیمت به **تومان** هست (تبدیل لازم نیست)
 ---
 
 ## ✅ بخش چهارم: کارهای انجام‌شده
@@ -137,7 +148,7 @@ LOG_PATH = data/scraper.log
 - [x] صفحه‌بندی ۶۰ محصول (۳ صفحه API × ۲۰)
 - [x] نمایش امتیاز به صورت ۵ ستاره
 
-### دیتابیس (SQLite)
+### دیتابیس(تغییر داده شد به postgresql بدلیل مشکل پس از redeploy و پاک شدن اطلاعات قیلی) (SQLite)
 - [x] جدول products (id, url, title, target_price, created_at)
 - [x] جدول price_history (id, product_id, price, timestamp)
 - [x] تابع add_product با ذخیره قیمت اولیه
@@ -170,6 +181,18 @@ LOG_PATH = data/scraper.log
 - [x] Procfile: `worker: python bot.py`
 - [x] `.python-version`: `3.12`
 
+### مقایسه با ترب (Torob)
+- [x] تابع `search_torob` با `curl_cffi`
+- [x] دور زدن CAPTCHA ترب با impersonate مرورگر
+- [x] دکمه «🏆 مقایسه در ترب» توی صفحه جزئیات
+- [x] نمایش ارزان‌ترین قیمت + مقایسه با دیجی‌کالا
+- [x] ۵-۱۰ نتیجه برتر ترب با دکمه خرید
+
+### دیتابیس PostgreSQL (Neon)
+- [x] مهاجرت از SQLite به PostgreSQL
+- [x] همه توابع دیتابیس به psycopg2
+- [x] جدول‌ها با `SERIAL` و `ON CONFLICT`
+- [x] داده‌ها روی Redeploy **باقی می‌مونن**
 ---
 
 ## 🔄 بخش پنجم: کارهای در دست / بعدی
@@ -188,6 +211,19 @@ LOG_PATH = data/scraper.log
 7. **داشبورد وب ساده** (Flask)
 8. **پلن اشتراک ماهانه** (SaaS)
 
+### کارهای بعدی (اولویت‌بندی شده جدید)
+1. **گزارش روزانه** (هر شب خلاصه قیمت‌ها)
+2. **README حرفه‌ای** + demo برای مشتری
+3. **آگهی در پونیشا/کارلنسر** ← **اولویت اصلی برای درآمد**
+4. **جستجوی پیشرفته از همون اول**
+5. **داشبورد وب**
+6. **مقایسه با باسلام و ایمالز**
+7. **پلن اشتراک ماهانه (SaaS)**
+
+### ⚠️ رها شده / ریسک‌دار
+- مقایسه با ترب گاهی نتایج نامرتبط می‌ده (مثل iPhone 16 → iPhone 17)
+- نیاز به فیلتر کردن عنوان‌های کوتاه داره
+
 ---
 
 ## 🐛 بخش ششم: باگ‌ها و راه‌حل‌های قبلی
@@ -205,6 +241,12 @@ LOG_PATH = data/scraper.log
 | فیلتر تکی بود نه چندگانه | toggle + دکمه «نمایش نتایج» |
 | عنوان‌های خاص HTML رو خراب می‌کردن | `html.escape` |
 | ترب `JSONDecodeError` | URL encode با `urllib.parse.quote` |
+| ترب `490` (CAPTCHA) | `curl_cffi` با `impersonate="chrome"` |
+| ترب `JSONDecodeError` | URL encode با `urllib.parse.quote` |
+| `psycopg2` نصب نمی‌شد روی ویندوز | `pip install psycopg2-binary` |
+| `load_products_from_db` هنوز sqlite بود | تغییر به `psycopg2` |
+| محصولات با Redeploy پاک می‌شدن | مهاجرت به Neon PostgreSQL |
+| `Conflict: terminated by other getUpdates` | طبیعیه موقع Redeploy، نادیده بگیر (اگه مداوم نباشه) |
 
 ---
 
@@ -243,6 +285,12 @@ git push
 مدت زمان دیپلوی Railway: ۱-۲ دقیقه
 
 زمان پایش اسکرپر: هر ۶ ساعت (CHECK_INTERVAL=21600)
+- **دیتابیس:** Neon PostgreSQL (رایگان، بدون تحریم)
+  - Connection String از: neon.tech → Project → Connect
+  - ممکنه نیاز باشه `&channel_binding=require` رو از انتهای URL حذف کنی
+- **نصب psycopg2:** فقط `psycopg2-binary` (نه `psycopg2`)
+- **`curl_cffi`:** روی ویندوز بدون مشکل نصب می‌شه، روی Railway هم اوکی
+- **هشدار امنیتی:** Connection String و Token رو **هیچ‌وقت** توی گیت‌هاب نذار. فقط توی Variables Railway.
 
 🎯 بخش نهم: استراتژی ادامه در چت جدید
 پیام شروع برای چت جدید:
@@ -258,6 +306,13 @@ git push
 آخرین state پروژه (باگ‌ها، کارهای در دست) رو توی همین فایل آپدیت کردی؟
 
 اگه فایل رو آپدیت کردی، محتوای جدید رو توی چت پیست کن.
+**⚠️ نکات مهم برای شروع چت جدید:**
+1. فایل `PROJECT_STATE.md` رو کامل پیست کن
+2. آخرین نسخه کدها توی گیت‌هاب: `AFSHIN1998py/digikala-scraper`
+3. قبل از چت جدید، مطمئن شو:
+   - اگه چت قبلی به محدودیت رسید، بگو کجا موندیم
+   - اگه باگ جدیدی هست، توضیح بده
+   - اگه چیزی پاک شد، از گیت‌هاب بازیابی کن
 
 💚 بخش دهم: یادداشت انسانی
 افشین واقعاً تلاشگر و باانگیزه‌ست. با وجود اینترنت سخت ایران،
