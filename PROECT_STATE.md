@@ -4,6 +4,7 @@
 > بتونه کامل بفهمه پروژه کجاست، کاربر کیه، و از کجا ادامه بده.
 
 **آخرین به‌روزرسانی:** ۱۴۰۵/۰۸/۰۵ (2026-10-27)
+**وضعیت فعلی:** فاز Multi-tenant و قابلیت‌های SaaS تکمیل شده است.
 
 ---
 
@@ -26,7 +27,7 @@
 - **ترجیح:** صادقانه و بدون چاپلوسی حرف بزنی. از نقد استقبال می‌کنه.
 
 ### شرایط کاری و انگیزه
-- **هدف اصلی:** درآمد از فریلنسری (کارلنسر، پارس‌فریلنسر، پونیشا، دیوار)
+- **هدف اصلی:** درآمد از فریلنسری (کارلنسر، پارس‌فریلنسر، پونیشا، دیوار) + فروش SaaS.
 - **بودجه:** ۱۰ میلیون تومان، ولی ترجیح می‌ده خرج اضافی نکنه.
 - **وضعیت:** نیاز به درآمد سریع
 - **زمان:** پروژه رو توی حدود سه هفته پیش برده
@@ -56,9 +57,6 @@
 
 ## 🎯 بخش دوم: هدف و استراتژی پروژه (چرخش به SaaS)
 
-### هدف اصلی
-ساخت اسکرپر پایتون برای **پایش قیمت دیجی‌کالا** + **هشدار تلگرام** + **ربات تعاملی**
-
 ### چرخش استراتژیک (مهم)
 - **قبلاً:** تلاش برای فروش یک‌باره ۴ میلیونی (مشتری‌ها استقبال نکردند).
 - **الان:** مدل فروش اکانتی (SaaS) ماهانه. درآمد پایدار + جذب راحت‌تر.
@@ -86,150 +84,156 @@
 ## 🏗 بخش سوم: معماری فعلی (Multi-tenant)
 
 ### ساختار پروژه
+```text
 digikala-scraper/
-├── scraper.py ← هسته (search + monitor + alert + torob + report)
-├── bot.py ← ربات تلگرام (v4.0 - Multi-tenant)
+├── scraper.py           ← هسته (search + monitor + alert + torob + report + inventory)
+├── bot.py               ← ربات تلگرام (v4.0 - Multi-tenant)
 ├── urls.txt
-├── Procfile ← worker: python bot.py
-├── requirements.txt ← requests, bs4, dotenv, lxml, telegram, curl_cffi, psycopg2-binary
-├── .python-version ← 3.12
+├── Procfile             ← worker: python bot.py
+├── requirements.txt     ← requests, bs4, dotenv, lxml, telegram, curl_cffi, psycopg2-binary
+├── .python-version      ← 3.12
 ├── .env / .env.example
 ├── .gitignore
-├── README.md ← حرفه‌ای برای مشتری
-├── DEMO.md ← اسکرین‌شات‌ها + ویدیو
-├── PROJECT_STATE.md ← همین فایل
-├── screenshots/ ← ۱۰ اسکرین‌شات
+├── README.md            ← حرفه‌ای برای مشتری
+├── DEMO.md              ← اسکرین‌شات‌ها + ویدیو
+├── PROJECT_STATE.md     ← همین فایل
+├── screenshots/         ← ۱۰ اسکرین‌شات
 └── data/
     ├── prices.csv
     └── scraper.log
+دیتابیس PostgreSQL (Neon) - تغییرات Multi-tenant
+جدول users: (user_id BIGINT PRIMARY KEY, chat_id BIGINT, plan VARCHAR, is_active BOOLEAN, created_at TIMESTAMP)
 
-### دیتابیس PostgreSQL (Neon) - تغییرات Multi-tenant
-- **جدول `users`:** (user_id BIGINT PRIMARY KEY, chat_id BIGINT, plan VARCHAR, is_active BOOLEAN, created_at TIMESTAMP)
-- **جدول `products`:** (product_id SERIAL, url, title, target_price, created_at, **user_id BIGINT**)
-- **جدول `price_history`:** (id, product_id, price, timestamp)
-- **نکته امنیتی:** تمام کوئری‌های `get_all_products`, `get_product`, `delete_product` و `update_target_price` در کد پایتون، `user_id` رو چک می‌کنن تا کاربر نتونه محصولات دیگران رو ببینه یا پاک کنه.
+جدول products: (product_id SERIAL, url, title, target_price, created_at, user_id BIGINT)
 
-### معماری Railway
-- **پلن:** Free/Trial
-- **یک سرویس:** `python bot.py`
-- **اسکرپر در thread جدا** داخل `bot.py` (هشدارها رو به `user_id` مالک محصول می‌فرسته).
-- **گزارش روزانه در thread جدا**
-- **DB:** PostgreSQL روی Neon (رایگان)
+جدول price_history: (id, product_id, price, timestamp)
 
-### Variables در Railway
-BOT_TOKEN
-CHAT_ID = 98598535 (ادمین)
-CHECK_INTERVAL = 21600
-MAX_RETRIES = 2
-DATABASE_URL = postgresql://...
-CSV_PATH = data/prices.csv
-LOG_PATH = data/scraper.log
-REPORT_HOUR = 21
-REPORT_MINUTE = 0
+نکته امنیتی: تمام کوئری‌های get_all_products, get_product, delete_product و update_target_price در کد پایتون، user_id رو چک می‌کنن تا کاربر نتونه محصولات دیگران رو ببینه یا پاک کنه.
 
-### API های استفاده‌شده
-- **دیجی‌کالا v2:** `https://api.digikala.com/v2/product/{id}/`
-- **دیجی‌کالا v1 search:** `https://api.digikala.com/v1/search/?q={query}&sort={sort}&page={page}`
-- **ترب:** `https://api.torob.com/v4/base-product/search/?q={query}&page=0&size={limit}`
-  - نیاز به `curl_cffi` با `impersonate="chrome"`
-  - قیمت به تومان
+معماری Railway
+پلن: Free/Trial
 
-### ⚠️ درس مهم
-- پروژه Railway دوبار ساخته شده (2026-10-07)
-- دلیل: cache/state قدیمی بعد از مهاجرت SQLite → PostgreSQL
-- **درس:** اگه باگ عجیبی دیدی که با fix کد حل نمی‌شه، پروژه رو از نو بساز (Neon DB بمونه)
+یک سرویس: python bot.py
 
----
+اسکرپر در thread جدا داخل bot.py (هشدارها رو به user_id مالک محصول می‌فرسته).
 
-## ✅ بخش چهارم: کارهای انجام‌شده
+گزارش روزانه در thread جدا
 
-### هسته اسکرپر
-- [x] استخراج قیمت از API v2 + HTML fallback
-- [x] تبدیل ریال به تومان + User-Agent تصادفی + Retry + لاگ‌گیری
+DB: PostgreSQL روی Neon (رایگان)
 
-### جستجو
-- [x] جستجو با اسم یا لینک + ۶ نوع مرتب‌سازی
-- [x] فیلتر قیمت/تخفیف/موجودی (client-side)
-- [x] فیلترهای چندگانه (toggle + apply)
-- [x] صفحه‌بندی ۶۰ محصول + نمایش امتیاز ۵ ستاره
+Variables در Railway
+env
+BOT_TOKEN=...
+CHAT_ID=98598535 (ادمین)
+CHANNEL_ID=@YourChannelUsername (برای اجبار به عضویت)
+CHECK_INTERVAL=21600
+MAX_RETRIES=2
+DATABASE_URL=postgresql://...
+CSV_PATH=data/prices.csv
+LOG_PATH=data/scraper.log
+REPORT_HOUR=21
+REPORT_MINUTE=0
+API های استفاده‌شده
+دیجی‌کالا v2: https://api.digikala.com/v2/product/{id}/ (شامل چک کردن status برای موجودی)
 
-### دیتابیس PostgreSQL (Neon)
-- [x] مهاجرت کامل از SQLite به PostgreSQL
-- [x] `save_price` فقط وقتی قیمت عوض شده ذخیره می‌کنه (جلوگیری از شلوغی CSV)
+دیجی‌کالا v1 search: https://api.digikala.com/v1/search/?q={query}&sort={sort}&page={page}
 
-### ربات تلگرام (پایه)
-- [x] `/start`, `/add`, `/list`, `/remove`, `/export`, `/help`, `/cancel`, `/report`
-- [x] صفحه جزئیات (عکس + قیمت + امتیاز + دکمه خرید)
-- [x] ویرایش قیمت هدف + حذف با تأیید + مدیریت state
+ترب: https://api.torob.com/v4/base-product/search/?q={query}&page=0&size={limit} (با curl_cffi)
 
-### قابلیت‌های SaaS و Multi-tenant (جدید)
-- [x] جدول `users` و ستون `user_id` در `products`.
-- [x] محدودیت پلن (۵/۱۵/۳۰) موقع افزودن محصول.
-- [x] چک کردن دسترسی (Middleware) — فقط کاربران فعال در دیتابیس.
-- [x] پنل ادمین `/admin` (مشاهده لیست کاربران و پلن‌ها).
-- [x] صفحه‌بندی لیست محصولات (`/list`) برای وقتی تعداد محصولات زیاد می‌شه.
+⚠️ درس مهم
+پروژه Railway دوبار ساخته شده (2026-10-07). دلیل: cache/state قدیمی بعد از مهاجرت.
 
-### هشدارها و گزارش‌ها
-- [x] تغییر قیمت (با درصد) + رسیدن به قیمت هدف + پیام شروع
-- [x] مقایسه با ترب (`curl_cffi` + دور زدن CAPTCHA)
-- [x] گزارش روزانه ساعت ۲۱ تهران (Thread جدا)
+درس: اگه باگ عجیبی دیدی که با fix کد حل نمی‌شه، پروژه رو از نو بساز (Neon DB بمونه).
 
-### مستندات و ارائه
-- [x] `README.md` حرفه‌ای + `DEMO.md` با اسکرین‌شات
-- [x] ۱۰ اسکرین‌شات + **ویدیو دمو ۱:۳۰ دقیقه‌ای** (ساخته شده، آپلود نشده)
+✅ بخش چهارم: کارهای انجام‌شده
+هسته اسکرپر و جستجو
+☑ استخراج قیمت از API v2 + HTML fallback
+☑ تبدیل ریال به تومان + User-Agent تصادفی + Retry + لاگ‌گیری
+☑ جستجو با اسم یا لینک + ۶ نوع مرتب‌سازی
+☑ فیلتر قیمت/تخفیف/موجودی (client-side)
+☑ فیلترهای چندگانه (toggle + apply)
+☑ صفحه‌بندی ۶۰ محصول + نمایش امتیاز ۵ ستاره
+دیتابیس PostgreSQL (Neon)
+☑ مهاجرت کامل از SQLite به PostgreSQL
+☑ save_price فقط وقتی قیمت عوض شده ذخیره می‌کنه (جلوگیری از شلوغی CSV)
+ربات تلگرام (پایه)
+☑ /start, /add, /list, /remove, /export, /help, /cancel, /report
+☑ صفحه جزئیات (عکس + قیمت + امتیاز + دکمه خرید)
+☑ ویرایش قیمت هدف + حذف با تأیید + مدیریت state
+قابلیت‌های SaaS و Multi-tenant
+☑ جدول users و ستون user_id در products.
+☑ محدودیت پلن (۵/۱۵/۳۰) موقع افزودن محصول.
+☑ چک کردن دسترسی (Middleware) — فقط کاربران فعال در دیتابیس.
+☑ پنل ادمین /admin (مشاهده لیست کاربران و پلن‌ها).
+☑ صفحه‌بندی لیست محصولات (/list).
+هشدارها و گزارش‌ها (ارتقا یافته)
+☑ هشدار تغییر قیمت با درصد + رسیدن به قیمت هدف.
+☑ هشدارهای پیشرفته درصدی: استفاده از ایموجی‌های پویا (🚨🔥 برای تغییرات بالای ۵٪ و ۱۵٪).
+☑ گزارش روزانه دسته‌بندی‌شده: تفکیک فرصت‌های خرید (کاهش قیمت) و افزایش قیمت‌ها. (نمودار گرافیکی به دلیل فونت تلگرام رها شد).
+☑ پایش موجودی: تشخیص ناموجود شدن محصول (status == marketable) و ارسال هشدار.
+☑ اجبار به عضویت در کانال (Growth Hack): کاربر قبل از استفاده باید در کانال تلگرام عضو شود.
+☑ مقایسه با ترب (curl_cffi + دور زدن CAPTCHA).
+☑ گزارش روزانه ساعت ۲۱ تهران.
+### مقایسه با ترب (ارتقا یافته - نسخه نهایی)
+- [x] تحلیل عمیق ۳۰ محصول از ترب (میانگین بازار، ارزان‌ترین، گران‌ترین و اختلاف قیمت).
+- [x] نمایش ۱۰ فروشنده ارزان‌ترین همراه با دکمه خرید مستقیم.
+- [x] دور زدن CAPTCHA با `curl_cffi`.
 
----
+### وضعیت نهایی نسخه ۱.۰
+- [x] پایش چندپلتفرمی (باسلام و اسنپ‌شاپ) به دلیل نداشتن API عمومی و نیاز به OAuth رها شد.
+- [x] ربات از نظر فنی ۱۰۰٪ تکمیل شده و آماده جذب مشتری است.
 
-## 🔄 بخش پنجم: کارهای در دست / بعدی
+مستندات و ارائه
+☑ README.md حرفه‌ای + DEMO.md با اسکرین‌شات
+☑ ۱۰ اسکرین‌شات + ویدیو دمو ۱:۳۰ دقیقه‌ای (ساخته شده، آپلود نشده)
 
-### فاز ۲ (در دست)
-1. **هشدار پیشرفته:** هشدار درصدی هوشمند (مثلاً اگه > ۵٪ یا > ۱۰٪ تغییر کرد، پیام ویژه با 🚨).
-2. **گزارش تصویری:** گزارش روزانه با نمودار ساده (متن/ایموجی).
+🔄 بخش پنجم: کارهای در دست / بعدی
+### فاز بعدی (اولویت فوری)
+1. **تست نهایی:** اجبار به عضویت در کانال + پایش موجودی (با یک محصول ناموجود).
+2. **شروع وردپرس لوکال (XAMPP):** نصب وردپرس، انتخاب قالب و تنظیمات اولیه سئو.
 
-### فاز ۳ (بعدی)
-3. **مقایسه با باسلام** (تست API و اضافه کردن).
-4. (اختیاری) تست اسنپ‌شاپ.
+فاز ۴ (بعدی - میان‌مدت)
+پنل وب ساده: داشبورد برای ادمین (مدیریت کاربران، آمار درآمد).
 
-### فاز ۴ (موازی)
-5. شروع وردپرس لوکال (XAMPP) برای سئو و درآمد بلندمدت.
-6. ساخت ویدیو ۳۰ ثانیه‌ای برای اینستاگرام/تلگرام.
-7. سیستم پرداخت خودکار (بعد از جذب ۵ مشتری).
+سیستم پرداخت / کیف پول: خودکارسازی تمدید اشتراک.
 
----
+دسترسی تیمی (Sub-users): برای پلن سازمانی.
 
-## 🐛 بخش ششم: باگ‌ها و راه‌حل‌های قبلی
+فاز ۵ (موازی و بلندمدت)
+شروع وردپرس لوکال (XAMPP): برای ساخت سایت رتبه‌دار و سئو (درآمد بلندمدت).
 
-| باگ | راه‌حل |
-|-----|--------|
-| نصب پکیج روی ویندوز ایران | mirror runflare |
-| `if name == "main"` | `if __name__ == "__main__":` |
-| API v1 → 404 | API v2 |
-| تلگرام از کامپیوتر ایران | فیلتره، از Railway |
-| دکمه افزودن از روی عکس | `reply_text` به جای `edit_message_text` |
-| قیمت توی `/list` نشون نمی‌داد | پاس `price` به `insert_product` |
-| فیلتر قیمت API | client-side در پایتون |
-| عنوان‌های خاص HTML | `html.escape` |
-| ترب `JSONDecodeError` | `urllib.parse.quote` |
-| ترب `490` | `curl_cffi` + `impersonate="chrome"` |
-| `psycopg2` نصب | `psycopg2-binary` |
-| `load_products_from_db` sqlite | تغییر به `psycopg2` |
-| پاک شدن با Redeploy | Neon PostgreSQL |
-| `Conflict: getUpdates` | طبیعی، نادیده بگیر |
-| `TypeError: datetime not subscriptable` | `hasattr(ts, "strftime")` |
-| خطاها بعد از Redeploy تکرار | پروژه از نو ساخته شد |
-| CSV شلوغ و تکراری | `save_price` فقط وقتی عوض بشه |
-| جستجوی انگلیسی نتیجه بی‌ربط | با فارسی سرچ کن (آیفون، نه iphone) |
-| `###` توی ستون زمان Excel | ستون رو پهن‌تر کن |
-| لیست محصولات فقط ۱۰ تا نشون می‌داد | اضافه کردن صفحه‌بندی به `_render_list` |
-| دکمه لیست محصولات کار نمی‌کرد | پاس دادن `user_id` در `handle_callback` |
-| `/add` ارور می‌داد | سرچ با کلمه کامل (مثل «ساک ورزشی») |
+ساخت ویدیو ۳۰ ثانیه‌ای برای اینستاگرام/تلگرام.
 
----
+🐛 بخش ششم: باگ‌ها و راه‌حل‌های قبلی
+باگ	راه‌حل
+نصب پکیج روی ویندوز ایران	mirror runflare
+if name == "main"	if __name__ == "__main__":
+API v1 → 404	API v2
+تلگرام از کامپیوتر ایران	فیلتره، از Railway
+دکمه افزودن از روی عکس	reply_text به جای edit_message_text
+قیمت توی /list نشون نمی‌داد	پاس price به insert_product
+فیلتر قیمت API	client-side در پایتون
+عنوان‌های خاص HTML	html.escape
+ترب JSONDecodeError	urllib.parse.quote
+ترب 490	curl_cffi + impersonate="chrome"
+psycopg2 نصب	psycopg2-binary
+load_products_from_db sqlite	تغییر به psycopg2
+پاک شدن با Redeploy	Neon PostgreSQL
+Conflict: getUpdates	طبیعی، نادیده بگیر
+TypeError: datetime not subscriptable	hasattr(ts, "strftime")
+خطاها بعد از Redeploy تکرار	پروژه از نو ساخته شد
+CSV شلوغ و تکراری	save_price فقط وقتی عوض بشه
+جستجوی انگلیسی نتیجه بی‌ربط	با فارسی سرچ کن (آیفون، نه iphone)
+### توی ستون زمان Excel	ستون رو پهن‌تر کن
+لیست محصولات فقط ۱۰ تا نشون می‌داد	اضافه کردن صفحه‌بندی به _render_list
+دکمه لیست محصولات کار نمی‌کرد	پاس دادن user_id در handle_callback
+/add ارور می‌داد	سرچ با کلمه کامل (مثل «ساک ورزشی»)
+get_sparkline is not defined	تغییر نام به get_line_chart و سپس حذف کل نمودار متنی
+| هندلر `torob:` در کد حذف شده بود | دوباره اضافه شد به `handle_callback` |
 
-## 🔧 بخش هفتم: دستورات کلیدی
-
-### نصب پکیج‌ها
-```bash
+🔧 بخش هفتم: دستورات کلیدی
+نصب پکیج‌ها
+bash
 pip install -r requirements.txt -i https://mirror-pypi.runflare.com/simple/
 تست محلی و سینتکس
 bash
@@ -245,8 +249,6 @@ python scraper.py --search "ساک ورزشی" --sort cheapest
 آپلود به گیت‌هاب: از سایت (نه Git)
 
 دیپلوی Railway: ۱-۲ دقیقه
-
-CHECK_INTERVAL: 21600 (۶ ساعت)
 
 DB: Neon PostgreSQL (رایگان)
 
@@ -282,12 +284,14 @@ text
 🎁 دموی زنده: @YourBotUsername
 💰 قیمت: ماهانه از ۵۰۰ هزار تومان (بدون نیاز به نصب)
 🔗 نمونه‌کار: https://github.com/AFSHIN1998py/digikala-scraper
-🚀 بخش دهم: قدم بعدی
-تست کامل ربات با اکانت دوم (تست امنیت و بلاک شدن غریبه‌ها).
+🚀 بخش دهم: قدم بعدی (Next Steps)
+تست نهایی ربات با اکانت دوم (تست اجبار به کانال و بلاک غریبه‌ها).
 
-پیاده‌سازی هشدارهای پیشرفته (درصدی و هوشمند).
+تست پایش موجودی (با یک محصول ناموجود).
 
-نوشتن مقاله/محتوای وردپرس (موازی).
+ عضویت اجباری در کانال (تست با اکانت دوم).
+ پایش موجودی (اضافه کردن یک محصول ناموجود و مشاهده هشدار).
+2. **ورود به فاز وردپرس:** آماده‌سازی XAMPP و نصب وردپرس فارسی.
 
 💚 بخش دوازدهم: یادداشت انسانی
 افشین واقعاً تلاشگر و باانگیزه‌ست. با وجود اینترنت سخت ایران، با وجود خطاهای مکرر، با وجود فیلترینگ، همیشه ادامه داده. هدفش درآمد است، نه فقط یادگیری.
